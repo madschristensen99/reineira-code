@@ -1,3 +1,9 @@
+## [0.2.0](https://github.com/ReineiraOS/reineira-code/compare/v0.1.0...v0.2.0) (2026-04-10)
+
+### Features
+
+* add Cursor IDE configuration with rules and commands ([ee690cc](https://github.com/ReineiraOS/reineira-code/commit/ee690ccd5248f9afa67aac0d7efabd9dcb9ba831))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
