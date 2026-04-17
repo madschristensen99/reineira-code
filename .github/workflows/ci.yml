@@ -29,14 +29,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Install dependencies
-        run: git submodule update --init --recursive
+        run: forge install --no-commit foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts@v5.4.0 FhenixProtocol/cofhe-contracts FhenixProtocol/cofhe-mock-contracts OpenZeppelin/openzeppelin-foundry-upgrades
 
       - name: Check formatting
         run: forge fmt --check
@@ -47,14 +45,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Install dependencies
-        run: git submodule update --init --recursive
+        run: forge install --no-commit foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts@v5.4.0 FhenixProtocol/cofhe-contracts FhenixProtocol/cofhe-mock-contracts OpenZeppelin/openzeppelin-foundry-upgrades
 
       - name: Compile contracts
         run: forge build --sizes
@@ -66,14 +62,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Install dependencies
-        run: git submodule update --init --recursive
+        run: forge install --no-commit foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts@v5.4.0 FhenixProtocol/cofhe-contracts FhenixProtocol/cofhe-mock-contracts OpenZeppelin/openzeppelin-foundry-upgrades
 
       - name: Run tests
         run: forge test -vvv
