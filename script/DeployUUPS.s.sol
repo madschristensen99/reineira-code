@@ -76,10 +76,12 @@ abstract contract DeployUUPS is Script {
         vm.serializeString(json, "type", "UUPS");
         string memory finalJson = vm.serializeString(json, "contractName", contractName);
 
-        // Write to file
-        vm.writeJson(finalJson, deploymentPath, string.concat(".", contractName));
-
-        console2.log("Deployment saved to:", deploymentPath);
+        // Try to write to file (may fail due to fs permissions in scripts)
+        try vm.writeJson(finalJson, deploymentPath, string.concat(".", contractName)) {
+            console2.log("Deployment saved to:", deploymentPath);
+        } catch {
+            console2.log("Note: Could not save deployment file (use --ffi flag if needed)");
+        }
     }
 
     /// @notice Get network name from chain ID
