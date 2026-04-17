@@ -14,7 +14,7 @@ contract SimpleUnderwriterPolicyTest is Test {
 
     function setUp() public {
         policy = new SimpleUnderwriterPolicy();
-        
+
         // Warp to a reasonable timestamp to avoid underflow
         vm.warp(100 days);
     }
@@ -51,7 +51,7 @@ contract SimpleUnderwriterPolicyTest is Test {
     // Note: FHE operations (evaluateRisk, judge) require the CoFHE precompile
     // which is only available on Fhenix/FHE-enabled networks, not in standard Foundry tests.
     // These functions are tested in the TypeScript integration tests or on testnet.
-    
+
     function test_EvaluateRisk_RevertsIfNotConfigured() public {
         bytes memory riskProof = "";
 
