@@ -8,6 +8,66 @@ alwaysApply: false
 
 ## Resolver Tests (no FHE needed)
 
+### Forge Pattern (Recommended)
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import {Test} from "forge-std/Test.sol";
+import {MyResolver} from "../contracts/resolvers/MyResolver.sol";
+import {IConditionResolver} from "../contracts/interfaces/IConditionResolver.sol";
+
+contract MyResolverTest is Test {
+    MyResolver public resolver;
+    uint256 constant ESCROW_ID = 1;
+
+    function setUp() public {
+        resolver = new MyResolver();
+    }
+
+    function test_OnConditionSet() public {
+        bytes memory data = abi.encode(/* your config */);
+        
+        vm.expectEmit(true, false, false, true);
+        emit MyResolver.ConditionSet(ESCROW_ID, /* expected params */);
+        
+        resolver.onConditionSet(ESCROW_ID, data);
+        
+        // assert stored state
+    }
+
+    function test_IsConditionMet_ReturnsFalseBeforeCondition() public {
+        bytes memory data = abi.encode(/* your config */);
+        resolver.onConditionSet(ESCROW_ID, data);
+        
+        assertFalse(resolver.isConditionMet(ESCROW_ID));
+    }
+
+    function test_IsConditionMet_ReturnsTrueAfterCondition() public {
+        bytes memory data = abi.encode(/* your config */);
+        resolver.onConditionSet(ESCROW_ID, data);
+        
+        // trigger condition (e.g., vm.warp, submitProof, etc.)
+        
+        assertTrue(resolver.isConditionMet(ESCROW_ID));
+    }
+
+    function test_SupportsInterface() public view {
+        assertTrue(resolver.supportsInterface(type(IConditionResolver).interfaceId));
+    }
+
+    function testFuzz_OnConditionSet(uint256 fuzzParam) public {
+        vm.assume(fuzzParam > 0);
+        bytes memory data = abi.encode(fuzzParam);
+        resolver.onConditionSet(ESCROW_ID, data);
+        // assert
+    }
+}
+```
+
+### Hardhat Pattern (Alternative)
+
 ```typescript
 import hre from 'hardhat';
 import { expect } from 'chai';
@@ -73,6 +133,21 @@ describe('MyPolicy', function () {
 
 ## Time Manipulation
 
+### Forge
+
+```solidity
+// Warp to specific timestamp
+vm.warp(deadline);
+
+// Advance by duration
+vm.warp(block.timestamp + 1 days);
+
+// Roll to specific block number
+vm.roll(blockNumber);
+```
+
+### Hardhat
+
 ```typescript
 import { time } from '@nomicfoundation/hardhat-network-helpers';
 
@@ -81,6 +156,63 @@ await time.increaseTo(deadline);
 
 // Advance by duration
 await time.increase(86400); // 1 day
+```
+
+## Mock Contracts (Forge)
+
+### Mock External Verifier
+
+```solidity
+contract MockReclaimVerifier {
+    mapping(bytes32 => bool) public validProofs;
+
+    function setValidProof(bytes32 proofHash, bool valid) external {
+        validProofs[proofHash] = valid;
+    }
+
+    function verifyProof(bytes calldata proof, bytes32) external view returns (bool) {
+        return validProofs[keccak256(proof)];
+    }
+}
+```
+
+### Mock Chainlink Feed
+
+```solidity
+contract MockChainlinkFeed {
+    int256 public price;
+    uint256 public updatedAt;
+    uint80 public roundId;
+
+    function setPrice(int256 _price) external {
+        price = _price;
+        updatedAt = block.timestamp;
+        roundId++;
+    }
+
+    function latestRoundData() external view returns (uint80, int256, uint256, uint256, uint80) {
+        return (roundId, price, 0, updatedAt, roundId);
+    }
+}
+```
+
+### Mock UMA Oracle
+
+```solidity
+contract MockOptimisticOracleV3 {
+    mapping(bytes32 => int256) public assertionOutcomes;
+    mapping(bytes32 => bool) public assertionSettled;
+
+    function setAssertion(bytes32 assertionId, int256 outcome, bool settled) external {
+        assertionOutcomes[assertionId] = outcome;
+        assertionSettled[assertionId] = settled;
+    }
+
+    function settleAndGetPrice(bytes32 assertionId) external view returns (int256) {
+        require(assertionSettled[assertionId], "Not settled");
+        return assertionOutcomes[assertionId];
+    }
+}
 ```
 
 ## ABI Encoding for Resolver Data
