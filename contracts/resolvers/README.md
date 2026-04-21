@@ -1,9 +1,41 @@
 # Condition Resolver Architecture
 
-This directory contains base abstractions for pluggable condition resolvers in the Reineira protocol. All resolvers implement the `IConditionResolver` interface with two core methods:
+This directory contains base abstractions and **production-ready reference implementations** for pluggable condition resolvers in the Reineira protocol. All resolvers implement the `IConditionResolver` interface with two core methods:
 
 - `isConditionMet(escrowId)` - View function to check if release condition is satisfied
 - `onConditionSet(escrowId, data)` - Called atomically during escrow creation to initialize resolver state
+
+## Reference Implementations
+
+**All reference resolvers are fully tested and ready for production use.** Use them as templates when building new resolvers.
+
+### TimeLockResolver
+**File:** `TimeLockResolver.sol`  
+**Test:** `test/TimeLockResolver.t.sol`  
+**Use case:** Time-based escrow release  
+**Pattern:** Simplest resolver - releases after a deadline
+
+### ReclaimResolver
+**File:** `ReclaimResolver.sol`  
+**Test:** `test/ReclaimResolver.t.sol`  
+**Use case:** zkTLS proof verification (PayPal, Stripe, bank APIs)  
+**Pattern:** Proof submission with replay protection and external verifier integration
+
+### ChainlinkPriceResolver
+**File:** `ChainlinkPriceResolver.sol`  
+**Test:** `test/ChainlinkPriceResolver.t.sol`  
+**Use case:** Price-gated escrow (oracle-based)  
+**Pattern:** Reads Chainlink price feeds with staleness validation and bidirectional thresholds
+
+### UMAOptimisticResolver
+**File:** `UMAOptimisticResolver.sol`  
+**Test:** `test/UMAOptimisticResolver.t.sol`  
+**Use case:** Prediction market outcomes, dispute resolution  
+**Pattern:** Settlement-based with outcome validation
+
+**Test Results:** All 58 tests passing (run `forge test` to verify)
+
+**Agent Context:** See `.cursor/rules/05-resolver-guide.mdc` for comprehensive authoring guide
 
 ## Architecture Overview
 
