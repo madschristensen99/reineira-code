@@ -69,10 +69,7 @@ abstract contract ZkPassConditionBase is IConditionResolver, ERC165 {
         if (verifier == address(0)) revert InvalidVerifier();
 
         $.configs[escrowId] = EscrowConfig({
-            verifier: verifier,
-            expectedCommitment: expectedCommitment,
-            maxProofAge: maxProofAge,
-            configured: true
+            verifier: verifier, expectedCommitment: expectedCommitment, maxProofAge: maxProofAge, configured: true
         });
 
         emit ZkPassConfigured(escrowId, verifier, expectedCommitment, maxProofAge);

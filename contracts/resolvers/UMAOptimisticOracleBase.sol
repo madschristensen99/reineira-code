@@ -40,8 +40,7 @@ abstract contract UMAOptimisticOracleBase is IPredictionMarketResolver, ERC165 {
     }
 
     // keccak256(abi.encode(uint256(keccak256("reineira.storage.UMAOptimisticOracleBase")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant UMA_STORAGE_LOCATION =
-        0x5c0d1a2b3e4f6a7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b00;
+    bytes32 private constant UMA_STORAGE_LOCATION = 0x5c0d1a2b3e4f6a7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b00;
 
     event UMAConfigured(uint256 indexed escrowId, bytes32 assertionId, bool expectedTruthful);
     event AssertionSettled(uint256 indexed escrowId, bytes32 assertionId, bool truthful);

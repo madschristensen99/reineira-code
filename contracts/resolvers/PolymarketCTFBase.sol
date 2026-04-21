@@ -143,7 +143,14 @@ abstract contract PolymarketCTFBase is IPredictionMarketResolver, ERC165 {
     /// @notice Get the number of outcome slots for a condition.
     /// @dev Default is 2 for binary markets. Override for categorical markets.
     /// @return The number of outcome slots.
-    function _getOutcomeSlotCount(uint256 /* escrowId */) internal view virtual returns (uint256) {
+    function _getOutcomeSlotCount(
+        uint256 /* escrowId */
+    )
+        internal
+        view
+        virtual
+        returns (uint256)
+    {
         return 2;
     }
 

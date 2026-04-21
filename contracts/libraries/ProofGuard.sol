@@ -33,11 +33,7 @@ library ProofGuard {
     /// @param consumed The storage mapping tracking consumed proofs.
     /// @param proofHash The keccak256 hash of the proof data.
     /// @return True if the proof has been used, false otherwise.
-    function isConsumed(mapping(bytes32 => bool) storage consumed, bytes32 proofHash)
-        internal
-        view
-        returns (bool)
-    {
+    function isConsumed(mapping(bytes32 => bool) storage consumed, bytes32 proofHash) internal view returns (bool) {
         return consumed[proofHash];
     }
 

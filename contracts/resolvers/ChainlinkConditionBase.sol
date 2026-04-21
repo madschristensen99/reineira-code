@@ -41,9 +41,7 @@ abstract contract ChainlinkConditionBase is IOracleConditionResolver, ERC165 {
     bytes32 private constant CHAINLINK_STORAGE_LOCATION =
         0x7e2d0a4b3c5f6e8d9a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e00;
 
-    event ChainlinkConfigured(
-        uint256 indexed escrowId, int256 threshold, ComparisonOp op, uint256 maxStaleness
-    );
+    event ChainlinkConfigured(uint256 indexed escrowId, int256 threshold, ComparisonOp op, uint256 maxStaleness);
 
     error ConditionAlreadySet();
     error ConditionNotConfigured();
