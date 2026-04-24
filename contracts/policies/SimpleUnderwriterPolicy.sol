@@ -39,9 +39,6 @@ contract SimpleUnderwriterPolicy is IUnderwriterPolicy, ERC165 {
         uint64 score = policies[coverageId].baseRiskScore;
         euint64 encrypted = FHE.asEuint64(score);
 
-        FHE.allowThis(encrypted);
-        FHE.allow(encrypted, msg.sender);
-
         return encrypted;
     }
 
@@ -56,8 +53,6 @@ contract SimpleUnderwriterPolicy is IUnderwriterPolicy, ERC165 {
         bool result = isValid && (block.timestamp - timestamp <= 30 days);
 
         ebool encrypted = FHE.asEbool(result);
-        FHE.allowThis(encrypted);
-        FHE.allow(encrypted, msg.sender);
 
         return encrypted;
     }

@@ -7,6 +7,33 @@ import {IConditionResolver} from "./IConditionResolver.sol";
 /// @notice Extended interface for prediction market-based condition resolvers.
 /// @dev Extends IConditionResolver with prediction market outcome resolution.
 ///      Supports binary and categorical markets from providers like Polymarket, UMA, etc.
+///
+/// ## Security & Privacy Considerations
+///
+/// **Settlement-Based Resolution:**
+/// Prediction market resolvers depend on external market settlement. The resolver
+/// must validate that outcomes are finalized before releasing escrow funds.
+///
+/// **Access Control (T4):**
+/// getOutcomeState and related query methods should be gated to prevent:
+/// - Correlation of escrows to specific prediction markets
+/// - Timing-based inference of market resolution
+/// - Binary-search attacks on expected outcomes
+///
+/// **Outcome Privacy:**
+/// While market outcomes are inherently public (they're settled on-chain), the
+/// mapping between escrows and specific markets should remain private. Use
+/// encrypted condition IDs where possible.
+///
+/// **Invalid State Handling:**
+/// Markets can resolve to "Invalid" if the question is ambiguous or disputed.
+/// Resolvers must define clear behavior for this case (e.g., refund, split, or
+/// defer to a fallback condition).
+///
+/// **Local Type Workarounds:**
+/// External market interfaces (Polymarket CTF, UMA OOv3) are defined locally in
+/// base contracts to avoid dependency management complexity. Production deployments
+/// should verify these match official interfaces.
 interface IPredictionMarketResolver is IConditionResolver {
     /// @notice Market outcome states.
     enum OutcomeState {

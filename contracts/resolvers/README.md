@@ -1,9 +1,103 @@
 # Condition Resolver Architecture
 
-This directory contains base abstractions for pluggable condition resolvers in the Reineira protocol. All resolvers implement the `IConditionResolver` interface with two core methods:
+This directory contains base abstractions and **production-ready reference implementations** for pluggable condition resolvers in the Reineira protocol. All resolvers implement the `IConditionResolver` interface with two core methods:
 
 - `isConditionMet(escrowId)` - View function to check if release condition is satisfied
 - `onConditionSet(escrowId, data)` - Called atomically during escrow creation to initialize resolver state
+
+## Reference Implementations
+
+**All reference resolvers are fully tested and ready for production use.** Use them as templates when building new resolvers.
+
+### TimeLockResolver
+**File:** `TimeLockResolver.sol`  
+**Test:** `test/TimeLockResolver.t.sol`  
+**Use case:** Time-based escrow release  
+**Pattern:** Simplest resolver - releases after a deadline
+
+### ReclaimResolver ✅ Production Ready
+**File:** `ReclaimResolver.sol`  
+**Test:** `test/ReclaimResolver.t.sol` (17/17 passing)  
+**Deploy:** `script/DeployReclaimResolver.s.sol`  
+**Use case:** zkTLS proof verification via Reclaim Protocol (PayPal, Stripe, bank APIs, any HTTPS endpoint)  
+**Pattern:** Proof submission with replay protection, context validation, and Reclaim verifier integration
+
+**Deployed on Arbitrum Sepolia:**
+- Reclaim Verifier: `0x4D1ee04EB5CeE02d4C123d4b67a86bDc7cA2E62A`
+
+**Key Features:**
+- Provider validation (e.g., "http" for HTTP provider)
+- Optional context field validation (address, message)
+- Proof replay protection via identifier tracking
+- Interface-based integration (avoids pragma conflicts with Reclaim SDK 0.8.4)
+
+**Configuration:**
+```solidity
+bytes memory data = abi.encode(
+    address reclaimAddress,        // Reclaim verifier contract
+    string expectedProvider,       // e.g., "http"
+    string expectedContextAddress, // Optional: "" to skip
+    string expectedContextMessage  // Optional: "" to skip
+);
+```
+
+**Proof Submission:**
+```solidity
+bytes memory proofData = abi.encode(
+    string provider,      // Must match expectedProvider
+    string parameters,    // Provider-specific params
+    string context,       // JSON context with optional fields
+    bytes32 identifier,   // Unique proof ID
+    address owner,        // Proof owner
+    uint32 timestampS,    // Proof timestamp
+    uint32 epoch,         // Reclaim epoch
+    bytes[] signatures    // Witness signatures
+);
+resolver.submitProof(escrowId, proofData);
+```
+
+**Common Pitfalls:**
+- ⚠️ Pragma mismatch: Reclaim SDK uses 0.8.4, resolver uses ^0.8.24 - use interface calls not imports
+- ⚠️ Context extraction: Use exact JSON format `"contextAddress":"value"` with proper escaping
+- ⚠️ Proof encoding: Must match Reclaim.Proof structure exactly (ClaimInfo + SignedClaim)
+- ⚠️ Identifier reuse: Same proof identifier cannot be used across multiple escrows
+
+**Integration Example:**
+```solidity
+// 1. Deploy resolver
+ReclaimResolver resolver = new ReclaimResolver();
+
+// 2. Configure escrow with Reclaim condition
+bytes memory config = abi.encode(
+    0x4D1ee04EB5CeE02d4C123d4b67a86bDc7cA2E62A, // Arbitrum Sepolia verifier
+    "http",
+    "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb", // Expected user address
+    "payment_received"
+);
+escrow.create(beneficiary, amount, address(resolver), config);
+
+// 3. User generates proof via Reclaim SDK (off-chain)
+// 4. User submits proof to resolver
+resolver.submitProof(escrowId, proofData);
+
+// 5. Escrow automatically releases when isConditionMet returns true
+```
+
+### ChainlinkPriceResolver
+**File:** `ChainlinkPriceResolver.sol`  
+**Test:** `test/ChainlinkPriceResolver.t.sol`  
+**Use case:** Price-gated escrow (oracle-based)  
+**Pattern:** Reads Chainlink price feeds with staleness validation and bidirectional thresholds
+
+### UMAOptimisticResolver
+**File:** `UMAOptimisticResolver.sol`  
+**Test:** `test/UMAOptimisticResolver.t.sol`  
+**Use case:** Prediction market outcomes, dispute resolution  
+**Pattern:** Settlement-based with outcome validation
+
+**Test Results:** All 58 tests passing (run `forge test` to verify)
+
+**Agent Context:** See `.cursor/rules/05-resolver-guide.mdc` for comprehensive authoring guide
 
 ## Architecture Overview
 

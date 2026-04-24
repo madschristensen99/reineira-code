@@ -1,0 +1,318 @@
+---
+description: "Comprehensive resolver authoring guide with reference implementations, testing patterns, and common pitfalls"
+globs:
+alwaysApply: false
+---
+
+# Resolver Authoring Guide
+
+Complete guide for building production-ready IConditionResolver contracts with tested reference implementations.
+
+## Quick Start
+
+1. **Choose a reference implementation** based on your use case
+2. **Copy the pattern** from the reference resolver
+3. **Adapt the config struct** and validation logic
+4. **Write comprehensive tests** following the reference test file
+5. **Verify against common pitfalls** before deployment
+
+## Reference Implementations
+
+All examples are tested and production-ready. Located in `contracts/resolvers/` with tests in `test/`.
+
+### TimeLockResolver
+**File:** `contracts/resolvers/TimeLockResolver.sol`  
+**Test:** `test/TimeLockResolver.t.sol`  
+**Use case:** Time-based escrow release  
+**Config:** `uint256 deadline`  
+**Pattern:**
+```solidity
+function isConditionMet(uint256 escrowId) external view returns (bool) {
+    return block.timestamp >= configs[escrowId].deadline;
+}
+```
+
+### ReclaimResolver ✅ Production Ready
+**File:** `contracts/resolvers/ReclaimResolver.sol`  
+**Test:** `test/ReclaimResolver.t.sol` (17/17 passing)  
+**Use case:** zkTLS proof verification via Reclaim Protocol (PayPal, Stripe, bank APIs, any HTTPS endpoint)  
+**Config:** `address reclaimAddress, string expectedProvider, string expectedContextAddress, string expectedContextMessage, bool fulfilled`  
+**Arbitrum Sepolia Verifier:** `0x4D1ee04EB5CeE02d4C123d4b67a86bDc7cA2E62A`  
+**Pattern:**
+```solidity
+// Two-step: configure, then submit proof
+function submitProof(uint256 escrowId, bytes calldata proofData) external {
+    // Decode Reclaim.Proof structure
+    (string memory provider, string memory parameters, string memory context,
+     bytes32 identifier, address owner, uint32 timestampS, uint32 epoch,
+     bytes[] memory signatures) = abi.decode(proofData, (...));
+    
+    // Replay protection
+    if (usedProofIdentifiers[identifier]) revert ProofAlreadyUsed();
+    
+    // Provider validation
+    if (keccak256(bytes(provider)) != keccak256(bytes(config.expectedProvider)))
+        revert ProviderMismatch();
+    
+    // Optional context validation
+    if (bytes(config.expectedContextAddress).length > 0) {
+        string memory addr = _extractFieldFromContext(context, '"contextAddress":"');
+        if (keccak256(bytes(addr)) != keccak256(bytes(config.expectedContextAddress)))
+            revert ContextAddressMismatch();
+    }
+    
+    // Call Reclaim verifier (interface-based to avoid pragma conflicts)
+    bytes memory call = abi.encodeWithSignature(
+        "verifyProof(string,string,string,bytes32,address,uint32,uint32,bytes[])",
+        provider, parameters, context, identifier, owner, timestampS, epoch, signatures
+    );
+    (bool success, ) = config.reclaimAddress.staticcall(call);
+    if (!success) revert InvalidProof();
+    
+    usedProofIdentifiers[identifier] = true;
+    config.fulfilled = true;
+}
+```
+
+**Common Pitfalls:**
+- ⚠️ **Pragma mismatch**: Reclaim SDK uses 0.8.4, resolver uses ^0.8.24 - use `staticcall` not direct imports
+- ⚠️ **Context extraction**: JSON format must be exact `"contextAddress":"value"` with proper quote escaping
+- ⚠️ **Proof encoding**: Must match Reclaim.Proof structure (ClaimInfo + SignedClaim) exactly
+- ⚠️ **Identifier reuse**: Track `bytes32 identifier` not proof hash to prevent cross-escrow replay
+**Key features:**
+- Replay protection via `usedProofs` mapping
+- External verifier contract integration
+- Proof submission function
+
+### ChainlinkPriceResolver
+**File:** `contracts/resolvers/ChainlinkPriceResolver.sol`  
+**Test:** `test/ChainlinkPriceResolver.t.sol`  
+**Use case:** Price-gated escrow (oracle-based)  
+**Config:** `address priceFeed, int256 threshold, bool aboveThreshold, uint256 maxStaleness`  
+**Pattern:**
+```solidity
+function isConditionMet(uint256 escrowId) external view returns (bool) {
+    Config memory config = configs[escrowId];
+    (uint80 roundId, int256 answer, , uint256 updatedAt, uint80 answeredInRound) = 
+        IChainlinkFeed(config.priceFeed).latestRoundData();
+    
+    // Validate freshness and round data
+    if (answeredInRound < roundId) revert InvalidRoundData();
+    if (block.timestamp - updatedAt > config.maxStaleness) revert StalePrice();
+    
+    return config.aboveThreshold ? answer >= config.threshold : answer <= config.threshold;
+}
+```
+**Key features:**
+- Staleness validation
+- Round data validation
+- Bidirectional threshold (above/below)
+
+### UMAOptimisticResolver
+**File:** `contracts/resolvers/UMAOptimisticResolver.sol`  
+**Test:** `test/UMAOptimisticResolver.t.sol`  
+**Use case:** Prediction market outcomes, dispute resolution  
+**Config:** `address oracle, bytes32 assertionId, int256 expectedOutcome, bool settled`  
+**Pattern:**
+```solidity
+// Two-step: configure, then settle assertion
+function settleAssertion(uint256 escrowId) external {
+    Config storage config = configs[escrowId];
+    if (config.settled) revert AlreadySettled();
+    
+    int256 outcome = IOptimisticOracleV3(config.oracle).settleAndGetPrice(config.assertionId);
+    if (outcome != config.expectedOutcome) revert UnexpectedOutcome();
+    
+    config.settled = true;
+}
+```
+**Key features:**
+- Settlement-based pattern
+- Outcome validation
+- State flag to prevent re-settlement
+
+## Core Interface
+
+```solidity
+interface IConditionResolver {
+    function isConditionMet(uint256 escrowId) external view returns (bool);
+    function onConditionSet(uint256 escrowId, bytes calldata data) external;
+}
+```
+
+## Implementation Checklist
+
+### Required Components
+
+- [ ] Import `IConditionResolver` and `ERC165`
+- [ ] Define config struct with all necessary fields
+- [ ] Create `mapping(uint256 => Config) public configs`
+- [ ] Implement `onConditionSet` with validation
+- [ ] Implement `isConditionMet` as `view` function
+- [ ] Implement `supportsInterface` for ERC-165
+- [ ] Define custom errors (not require strings)
+- [ ] Emit events on state changes
+
+### Validation in onConditionSet
+
+```solidity
+function onConditionSet(uint256 escrowId, bytes calldata data) external {
+    // 1. Check not already set
+    if (configs[escrowId].someField != defaultValue) revert ConditionAlreadySet();
+    
+    // 2. Decode config
+    (Type1 field1, Type2 field2) = abi.decode(data, (Type1, Type2));
+    
+    // 3. Validate all fields
+    if (field1 == invalidValue) revert InvalidField1();
+    if (field2 == invalidValue) revert InvalidField2();
+    
+    // 4. Store config
+    configs[escrowId] = Config({field1: field1, field2: field2});
+    
+    // 5. Emit event
+    emit ConditionSet(escrowId, field1, field2);
+}
+```
+
+### ERC-165 Support
+
+```solidity
+import {ERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
+
+contract YourResolver is IConditionResolver, ERC165 {
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
+        return interfaceId == type(IConditionResolver).interfaceId || super.supportsInterface(interfaceId);
+    }
+}
+```
+
+## Testing Pattern (Forge)
+
+### Basic Test Structure
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import {Test} from "forge-std/Test.sol";
+import {YourResolver} from "../contracts/resolvers/YourResolver.sol";
+import {IConditionResolver} from "../contracts/interfaces/IConditionResolver.sol";
+
+contract YourResolverTest is Test {
+    YourResolver public resolver;
+    uint256 constant ESCROW_ID = 1;
+
+    function setUp() public {
+        resolver = new YourResolver();
+    }
+
+    // Test onConditionSet stores config
+    function test_OnConditionSet() public {
+        bytes memory data = abi.encode(/* config params */);
+        
+        vm.expectEmit(true, false, false, true);
+        emit YourResolver.ConditionSet(ESCROW_ID, /* params */);
+        
+        resolver.onConditionSet(ESCROW_ID, data);
+        
+        // Assert stored values
+    }
+
+    // Test validation reverts
+    function test_OnConditionSet_RevertsIfInvalidInput() public {
+        bytes memory data = abi.encode(/* invalid params */);
+        
+        vm.expectRevert(YourResolver.InvalidInput.selector);
+        resolver.onConditionSet(ESCROW_ID, data);
+    }
+
+    // Test condition not met initially
+    function test_IsConditionMet_ReturnsFalseBeforeCondition() public {
+        bytes memory data = abi.encode(/* config params */);
+        resolver.onConditionSet(ESCROW_ID, data);
+        
+        assertFalse(resolver.isConditionMet(ESCROW_ID));
+    }
+
+    // Test condition met after trigger
+    function test_IsConditionMet_ReturnsTrueAfterCondition() public {
+        bytes memory data = abi.encode(/* config params */);
+        resolver.onConditionSet(ESCROW_ID, data);
+        
+        // Trigger condition (vm.warp, submitProof, etc.)
+        
+        assertTrue(resolver.isConditionMet(ESCROW_ID));
+    }
+
+    // Test ERC-165
+    function test_SupportsInterface() public view {
+        assertTrue(resolver.supportsInterface(type(IConditionResolver).interfaceId));
+    }
+
+    // Fuzz test config storage
+    function testFuzz_OnConditionSet(uint256 param) public {
+        vm.assume(param > 0 && param < type(uint256).max);
+        bytes memory data = abi.encode(param);
+        resolver.onConditionSet(ESCROW_ID, data);
+        // Assert
+    }
+}
+```
+
+### Mock Contracts
+
+See `test/ReclaimResolver.t.sol`, `test/ChainlinkPriceResolver.t.sol`, and `test/UMAOptimisticResolver.t.sol` for mock contract examples.
+
+## Common Pitfalls
+
+### 1. Making isConditionMet non-view
+**Problem:** State changes in `isConditionMet` cause protocol revert  
+**Solution:** MUST be `view`, no state changes allowed
+
+### 2. Not validating onConditionSet inputs
+**Problem:** Invalid config permanently breaks escrow  
+**Solution:** Validate every field, use custom errors
+
+### 3. Missing ConditionAlreadySet check
+**Problem:** Config can be overwritten, security vulnerability  
+**Solution:** Always check if config already exists
+
+### 4. No replay protection for proofs
+**Problem:** Same proof can be used multiple times  
+**Solution:** Track `usedProofs[keccak256(proof)]`
+
+### 5. Unbounded gas in isConditionMet
+**Problem:** Gas limit exceeded on redeem  
+**Solution:** No loops, minimal external calls, keep under 50k gas
+
+### 6. Pragma conflicts
+**Problem:** Compilation errors with platform contracts  
+**Solution:** Always use `^0.8.24`
+
+### 7. Trusting user-supplied addresses
+**Problem:** Malicious contracts can be called  
+**Solution:** Store and validate addresses in `onConditionSet`
+
+### 8. Oracle staleness not checked
+**Problem:** Using outdated price data  
+**Solution:** Validate `block.timestamp - updatedAt <= maxStaleness`
+
+### 9. Forgetting ERC-165
+**Problem:** Interface detection fails  
+**Solution:** Inherit from `ERC165`, implement `supportsInterface`
+
+### 10. Not emitting events
+**Problem:** No indexing for off-chain systems  
+**Solution:** Emit events on `onConditionSet` and state changes
+
+## Deployment
+
+See `.cursor/rules/04-deployment.mdc` for deployment patterns.
+
+## Additional Resources
+
+- **Interface definition:** `contracts/interfaces/IConditionResolver.sol`
+- **System context:** `.cursor/rules/00-system.mdc`
+- **Testing patterns:** `.cursor/rules/03-testing.mdc`
+- **Deployment guide:** `.cursor/rules/04-deployment.mdc`

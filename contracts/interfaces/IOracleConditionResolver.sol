@@ -8,6 +8,28 @@ import {IConditionResolver} from "./IConditionResolver.sol";
 /// @dev Extends IConditionResolver with oracle-specific functionality.
 ///      Implementations should support multiple oracle providers (Chainlink, UMA, etc.)
 ///      and handle data feed validation, staleness checks, and threshold comparisons.
+///
+/// ## Security & Privacy Considerations
+///
+/// **Staleness Checks (P2, Prova findings):**
+/// Oracle-based resolvers MUST validate data freshness to prevent stale data attacks.
+/// The maxStaleness parameter should be enforced in every getLatestValue call.
+///
+/// **Access Control (T4):**
+/// isConditionMet and oracle query methods should be gated to prevent:
+/// - Binary-search attacks on threshold values
+/// - Correlation of escrows to specific oracle feeds
+/// - Timing-based inference of condition state changes
+///
+/// **Threshold Privacy:**
+/// While comparison operators are public (part of the condition logic), the actual
+/// threshold values and oracle readings should remain encrypted where possible to
+/// prevent competitors from reverse-engineering pricing models.
+///
+/// **Local Type Workarounds:**
+/// External oracle interfaces (Chainlink, UMA) are defined locally in base contracts
+/// to avoid dependency management complexity. Production deployments should verify
+/// these match official interfaces.
 interface IOracleConditionResolver is IConditionResolver {
     /// @notice Comparison operators for oracle value checks.
     enum ComparisonOp {

@@ -6,6 +6,23 @@ pragma solidity ^0.8.24;
 /// @dev Implement this to verify zero-knowledge proofs of TLS session data.
 ///      Used by condition resolvers that require authenticated off-chain data
 ///      (e.g., proving a specific HTTP response was received from a server).
+///
+/// ## Security & Privacy Considerations
+///
+/// **Adapter Boundary (P8):**
+/// Adapters implementing this interface are the weakest privacy link. Rules:
+/// 1. Plaintext score/data lives for ONE stack frame only: verify → encrypt → return
+/// 2. NO events containing scores, amounts, or commitment values
+/// 3. NO "what did you last return" view functions
+/// 4. State needed for nonces/replay is opaque (bytes32), not (id, value) tuples
+///
+/// **Freshness & Replay Protection:**
+/// All proof-based resolvers MUST use ProofGuard.consume() to prevent proof reuse
+/// across escrows. Timestamp validation prevents stale data attacks.
+///
+/// **Access Control:**
+/// Only registered resolver contracts should call verifyProof. Consider gating
+/// with an allowlist to prevent arbitrary proof queries that could leak metadata.
 interface IZkTLSVerifier {
     /// @notice Verify a zkTLS proof against expected parameters.
     /// @dev MUST be a view function. Implementations should validate:

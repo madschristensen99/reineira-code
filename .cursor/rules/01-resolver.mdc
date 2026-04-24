@@ -89,10 +89,59 @@ function supportsInterface(bytes4 interfaceId) public view override returns (boo
 - Simplest pattern: `block.timestamp >= deadline`
 - `onConditionSet` stores deadline, validates it's in the future
 
+## Reference Implementations
+
+All reference resolvers are tested and production-ready. Use them as scaffolding templates.
+
+### TimeLockResolver
+**Path:** `contracts/resolvers/TimeLockResolver.sol`  
+**Test:** `test/TimeLockResolver.t.sol`  
+**Use case:** Time-based release (simplest pattern)  
+**Config:** `uint256 deadline`  
+**Pattern:** `block.timestamp >= deadline`
+
+### ReclaimResolver
+**Path:** `contracts/resolvers/ReclaimResolver.sol`  
+**Test:** `test/ReclaimResolver.t.sol`  
+**Use case:** zkTLS proof verification (PayPal, Stripe, bank APIs)  
+**Config:** `address verifier, bytes32 expectedClaimHash`  
+**Pattern:** Proof submission + verification via external verifier contract  
+**Key features:**
+- Replay protection via `usedProofs` mapping
+- `submitProof()` function for off-chain proof submission
+- `fulfilled` flag to mark condition met
+
+### ChainlinkPriceResolver
+**Path:** `contracts/resolvers/ChainlinkPriceResolver.sol`  
+**Test:** `test/ChainlinkPriceResolver.t.sol`  
+**Use case:** Price-gated escrow (oracle-based)  
+**Config:** `address priceFeed, int256 threshold, bool aboveThreshold, uint256 maxStaleness`  
+**Pattern:** Reads Chainlink price feed and validates freshness  
+**Key features:**
+- Staleness validation: `block.timestamp - updatedAt <= maxStaleness`
+- Round data validation: `answeredInRound >= roundId`
+- Supports both above/below threshold conditions
+
+### UMAOptimisticResolver
+**Path:** `contracts/resolvers/UMAOptimisticResolver.sol`  
+**Test:** `test/UMAOptimisticResolver.t.sol`  
+**Use case:** Prediction market outcomes, dispute resolution  
+**Config:** `address oracle, bytes32 assertionId, int256 expectedOutcome`  
+**Pattern:** Settlement-based with `settleAssertion()` function  
+**Key features:**
+- Two-step process: assertion settles, then condition met
+- Outcome validation against expected value
+- `settled` flag to prevent re-settlement
+
 ## Common Mistakes
 
-1. Making `isConditionMet` non-view — causes protocol revert
-2. Not validating `onConditionSet` inputs — permanently broken escrow
-3. Trusting user-supplied addresses in view calls — store and validate in `onConditionSet`
-4. No replay protection for proof-based resolvers — track `usedProofs[keccak256(proof)]`
-5. Unbounded gas in `isConditionMet` — no loops or multiple external calls
+1. **Making `isConditionMet` non-view** — causes protocol revert, MUST be view
+2. **Not validating `onConditionSet` inputs** — permanently broken escrow, validate everything
+3. **Trusting user-supplied addresses in view calls** — store and validate in `onConditionSet`
+4. **No replay protection for proof-based resolvers** — track `usedProofs[keccak256(proof)]`
+5. **Unbounded gas in `isConditionMet`** — no loops or multiple external calls, keep under 50k gas
+6. **Pragma conflicts** — always use `^0.8.24`, matches platform contracts
+7. **Missing ConditionAlreadySet check** — prevents config overwrite attacks
+8. **Not emitting events** — emit on `onConditionSet` and state changes for indexing
+9. **Forgetting ERC-165** — required for interface detection, inherit from `ERC165`
+10. **Oracle staleness not checked** — always validate `updatedAt` for price feeds
