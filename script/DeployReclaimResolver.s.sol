@@ -1,17 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Script} from "forge-std/Script.sol";
+import {Deploy} from "./Deploy.s.sol";
 import {ReclaimResolver} from "../contracts/resolvers/ReclaimResolver.sol";
 
-contract DeployReclaimResolver is Script {
-    function run() external returns (ReclaimResolver) {
-        vm.startBroadcast();
-        
+/// @title DeployReclaimResolver
+/// @notice Deployment script for ReclaimResolver on Arbitrum Sepolia
+/// @dev Deploys the Reclaim Protocol zkTLS-based condition resolver
+contract DeployReclaimResolver is Deploy {
+    function run() public override {
+        uint256 deployerPrivateKey = getDeployerPrivateKey();
+
+        vm.startBroadcast(deployerPrivateKey);
+
         ReclaimResolver resolver = new ReclaimResolver();
-        
+
         vm.stopBroadcast();
-        
-        return resolver;
+
+        logDeployment("ReclaimResolver", address(resolver));
+        saveDeployment("ReclaimResolver", address(resolver));
     }
 }

@@ -32,22 +32,53 @@ function isConditionMet(uint256 escrowId) external view returns (bool) {
 }
 ```
 
-### ReclaimResolver
+### ReclaimResolver ✅ Production Ready
 **File:** `contracts/resolvers/ReclaimResolver.sol`  
-**Test:** `test/ReclaimResolver.t.sol`  
-**Use case:** zkTLS proof verification (PayPal, Stripe, bank APIs)  
-**Config:** `address verifier, bytes32 expectedClaimHash, bool fulfilled`  
+**Test:** `test/ReclaimResolver.t.sol` (17/17 passing)  
+**Use case:** zkTLS proof verification via Reclaim Protocol (PayPal, Stripe, bank APIs, any HTTPS endpoint)  
+**Config:** `address reclaimAddress, string expectedProvider, string expectedContextAddress, string expectedContextMessage, bool fulfilled`  
+**Arbitrum Sepolia Verifier:** `0x4D1ee04EB5CeE02d4C123d4b67a86bDc7cA2E62A`  
 **Pattern:**
 ```solidity
 // Two-step: configure, then submit proof
-function submitProof(uint256 escrowId, bytes calldata proof) external {
-    bytes32 proofHash = keccak256(proof);
-    if (usedProofs[proofHash]) revert ProofAlreadyUsed();
-    // verify proof via external verifier
-    usedProofs[proofHash] = true;
-    configs[escrowId].fulfilled = true;
+function submitProof(uint256 escrowId, bytes calldata proofData) external {
+    // Decode Reclaim.Proof structure
+    (string memory provider, string memory parameters, string memory context,
+     bytes32 identifier, address owner, uint32 timestampS, uint32 epoch,
+     bytes[] memory signatures) = abi.decode(proofData, (...));
+    
+    // Replay protection
+    if (usedProofIdentifiers[identifier]) revert ProofAlreadyUsed();
+    
+    // Provider validation
+    if (keccak256(bytes(provider)) != keccak256(bytes(config.expectedProvider)))
+        revert ProviderMismatch();
+    
+    // Optional context validation
+    if (bytes(config.expectedContextAddress).length > 0) {
+        string memory addr = _extractFieldFromContext(context, '"contextAddress":"');
+        if (keccak256(bytes(addr)) != keccak256(bytes(config.expectedContextAddress)))
+            revert ContextAddressMismatch();
+    }
+    
+    // Call Reclaim verifier (interface-based to avoid pragma conflicts)
+    bytes memory call = abi.encodeWithSignature(
+        "verifyProof(string,string,string,bytes32,address,uint32,uint32,bytes[])",
+        provider, parameters, context, identifier, owner, timestampS, epoch, signatures
+    );
+    (bool success, ) = config.reclaimAddress.staticcall(call);
+    if (!success) revert InvalidProof();
+    
+    usedProofIdentifiers[identifier] = true;
+    config.fulfilled = true;
 }
 ```
+
+**Common Pitfalls:**
+- ⚠️ **Pragma mismatch**: Reclaim SDK uses 0.8.4, resolver uses ^0.8.24 - use `staticcall` not direct imports
+- ⚠️ **Context extraction**: JSON format must be exact `"contextAddress":"value"` with proper quote escaping
+- ⚠️ **Proof encoding**: Must match Reclaim.Proof structure (ClaimInfo + SignedClaim) exactly
+- ⚠️ **Identifier reuse**: Track `bytes32 identifier` not proof hash to prevent cross-escrow replay
 **Key features:**
 - Replay protection via `usedProofs` mapping
 - External verifier contract integration
